@@ -25,6 +25,19 @@ export async function handleApi(request, env, username, url) {
     return json({ avatar_url: profile.avatar });
   }
 
+  if (request.method === "POST" && url.pathname === "/api/user_avatars") {
+    const body = await request.json();
+    const names = [...new Set((body.users || []).map(cleanName).filter(Boolean))].slice(0, 100);
+    const avatars = {};
+
+    for (const name of names) {
+      const profile = await getProfile(env.DB, name);
+      avatars[name] = profile.avatar;
+    }
+
+    return json({ avatars });
+  }
+
   if (request.method === "POST" && url.pathname === "/api/change_username") {
     return changeUsername(request, env, username);
   }
