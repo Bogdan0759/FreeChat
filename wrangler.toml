@@ -5,7 +5,7 @@ compatibility_date = "2026-06-01"
 [[d1_databases]]
 binding = "DB"
 database_name = "freechat-db"
-database_id = "ce84f297-651d-44a5-95a5-cfab1b0be4e0"
+database_id = ""
 
 [[durable_objects.bindings]]
 name = "ROOM"
