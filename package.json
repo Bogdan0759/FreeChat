@@ -5,9 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
+    "predeploy": "npm run build:protocol",
     "deploy": "wrangler deploy",
     "db:local": "wrangler d1 migrations apply freechat-db --local",
-    "db:remote": "wrangler d1 migrations apply freechat-db --remote"
+    "db:remote": "wrangler d1 migrations apply freechat-db --remote",
+    "build:protocol": "clang --target=wasm32 -Oz -nostdlib -Wl,--no-entry -Wl,--export-memory -Wl,--export=fc_header_size -Wl,--export=fc_scratch_ptr -Wl,--export=fc_write_header -Wl,--export=fc_payload_len -Wl,--export=fc_request_id -Wl,--export=fc_op -Wl,--export=fc_validate_header -o src/protocol/freechat_protocol.wasm src/protocol/freechat_protocol.c",
+    "check": "node --check src/index.js && node --check src/app/router.js && node --check src/realtime/ChatRoom.js && node --check src/protocol/index.js"
   },
   "devDependencies": {
     "wrangler": "^4.0.0"
