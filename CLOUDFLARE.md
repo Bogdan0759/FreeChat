@@ -1,9 +1,10 @@
 # FreeChat на Cloudflare Workers
 
-Проект переписан под Cloudflare Workers без FastAPI. Что используется:
+Что используется:
 
 - Worker: HTTP-страницы, auth, API.
 - D1: пользователи, чаты, сообщения, профили.
+- KV: session tokens.
 - Durable Object: realtime WebSocket-комната.
 - Wrangler: локальный запуск, миграции, деплой.
 
@@ -18,28 +19,35 @@ npm run dev
 
 После запуска Wrangler даст локальный URL, обычно `http://localhost:8787`.
 
-Тестовые аккаунты:
+## Cloudflare resources
 
-```text
-admin / 123456
-alice / alice123
-bob / bob123
-```
-
-## Создать D1 в Cloudflare
+Создать D1:
 
 ```bash
 npx wrangler login
 npx wrangler d1 create freechat-db
 ```
 
-Wrangler выведет `database_id`. Его надо вставить в `wrangler.toml` вместо:
+Создать KV для сессий:
 
-```toml
-database_id = "replace-with-cloudflare-d1-database-id"
+```bash
+npx wrangler kv namespace create SESSIONS
 ```
 
-## Применить миграции в Cloudflare
+Wrangler выведет `database_id` и KV `id`. Их надо вставить в `wrangler.toml`:
+
+```toml
+[[d1_databases]]
+binding = "DB"
+database_name = "freechat-db"
+database_id = "..."
+
+[[kv_namespaces]]
+binding = "SESSIONS"
+id = "..."
+```
+
+## Применить миграции
 
 ```bash
 npm run db:remote
@@ -51,10 +59,21 @@ npm run db:remote
 npm run deploy
 ```
 
-После деплоя приложение будет доступно на `*.workers.dev`, если в аккаунте включен workers.dev.
+`deploy` автоматически пересобирает C/WASM-протокол через `predeploy`.
 
-## Что пока MVP
+## Auth security
 
-- Аватары хранятся прямо в D1 как data URL, поэтому лимит поставлен 512KB.
-- Сессия простая: cookie с username. Для продакшена лучше добавить signed session token.
-- Все пользователи сидят в одном Durable Object `global`. Для большого чата потом можно разбить по комнатам.
+Сейчас auth уже не просто cookie=username:
+
+- cookie хранит random session token;
+- session token хранится в KV только как `sha256(token)` key;
+- cookie `HttpOnly`, `SameSite=Lax`, `Secure` на HTTPS;
+- пароли новых пользователей хранятся как PBKDF2-SHA256 + salt;
+- старые SHA-256 пароли мигрируют на PBKDF2 после успешного логина;
+- WebSocket берет username из серверной сессии, а не доверяет клиентскому `set_username`.
+
+Остается добавить позже:
+
+- rate limit на login/register;
+- CSRF token для POST-форм;
+- R2 для аватаров вместо data URL в D1.

@@ -1,6 +1,6 @@
-export const COOKIE_NAME = "freechat_user";
+export const COOKIE_NAME = "freechat_session";
 
-export function getSessionUser(request) {
+export function getSessionToken(request) {
   const cookies = request.headers.get("Cookie") || "";
   for (const part of cookies.split(";")) {
     const [key, value] = part.trim().split("=");
@@ -9,10 +9,12 @@ export function getSessionUser(request) {
   return "";
 }
 
-export function sessionCookie(username) {
-  return `${COOKIE_NAME}=${encodeURIComponent(username)}; Path=/; Max-Age=2592000; SameSite=Lax; HttpOnly`;
+export function sessionCookie(token, request) {
+  const secure = new URL(request.url).protocol === "https:" ? "; Secure" : "";
+  return `${COOKIE_NAME}=${encodeURIComponent(token)}; Path=/; Max-Age=2592000; SameSite=Lax; HttpOnly${secure}`;
 }
 
-export function clearSessionCookie() {
-  return `${COOKIE_NAME}=; Path=/; Max-Age=0; SameSite=Lax`;
+export function clearSessionCookie(request) {
+  const secure = new URL(request.url).protocol === "https:" ? "; Secure" : "";
+  return `${COOKIE_NAME}=; Path=/; Max-Age=0; SameSite=Lax; HttpOnly${secure}`;
 }

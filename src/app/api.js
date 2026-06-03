@@ -2,9 +2,12 @@ import { getChats, getHistory, getProfile, renameUser, updateAvatar } from "../d
 import { arrayBufferToBase64 } from "../utils/avatar.js";
 import { cleanName } from "../utils/input.js";
 import { json } from "../utils/http.js";
-import { sessionCookie } from "../utils/session.js";
+import { writeSession } from "../data/sessionStore.js";
+import { getSessionToken } from "../utils/session.js";
 
 export async function handleApi(request, env, username, url) {
+  if (!username) return json({ error: "Not authenticated" }, 401);
+
   if (request.method === "GET" && url.pathname === "/api/chats") {
     return json(await getChats(env.DB));
   }
@@ -15,7 +18,6 @@ export async function handleApi(request, env, username, url) {
   }
 
   if (request.method === "GET" && url.pathname === "/api/user_profile") {
-    if (!username) return json({ error: "Not authenticated" }, 401);
     return json(await getProfile(env.DB, username));
   }
 
@@ -60,7 +62,8 @@ async function changeUsername(request, env, username) {
 
   try {
     if (!await renameUser(env.DB, username, newUsername)) return json({ error: "User not found" }, 404);
-    return json({ success: true, new_username: newUsername }, 200, { cookie: sessionCookie(newUsername) });
+    await writeSession(env, getSessionToken(request), newUsername);
+    return json({ success: true, new_username: newUsername });
   } catch {
     return json({ error: "Failed to update username" }, 400);
   }

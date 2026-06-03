@@ -2,14 +2,33 @@ import { defaultAvatar } from "../utils/avatar.js";
 import { sha256 } from "../utils/crypto.js";
 import { shortMessage } from "../utils/input.js";
 
+const PASSWORD_VERSION = 2;
 export async function authenticateUser(db, username, password) {
-  const row = await db.prepare("select password_hash from users where username = ?").bind(username).first();
-  return Boolean(row && row.password_hash === await sha256(password));
+  const row = await db.prepare("select username, password_hash, password_salt, password_version from users where username = ?")
+    .bind(username).first();
+  if (!row) return false;
+
+  if (row.password_version === PASSWORD_VERSION && row.password_salt) {
+    return row.password_hash === await hashPassword(password, row.password_salt);
+  }
+
+  const ok = row.password_hash === await sha256(password);
+  if (ok) await updatePassword(db, username, password);
+  return ok;
 }
 
 export async function createUser(db, username, password) {
-  await db.prepare("insert into users(username, password_hash) values (?, ?)")
-    .bind(username, await sha256(password)).run();
+  const password_salt = randomToken(18);
+  const password_hash = await hashPassword(password, password_salt);
+  await db.prepare("insert into users(username, password_hash, password_salt, password_version) values (?, ?, ?, ?)")
+    .bind(username, password_hash, password_salt, PASSWORD_VERSION).run();
+}
+
+export async function updatePassword(db, username, password) {
+  const password_salt = randomToken(18);
+  const password_hash = await hashPassword(password, password_salt);
+  await db.prepare("update users set password_hash = ?, password_salt = ?, password_version = ? where username = ?")
+    .bind(password_hash, password_salt, PASSWORD_VERSION, username).run();
 }
 
 export async function getPasswordHash(db, username) {
@@ -17,11 +36,13 @@ export async function getPasswordHash(db, username) {
 }
 
 export async function renameUser(db, oldUsername, newUsername) {
-  const old = await getPasswordHash(db, oldUsername);
+  const old = await db.prepare("select password_hash, password_salt, password_version from users where username = ?")
+    .bind(oldUsername).first();
   if (!old) return false;
 
   await db.batch([
-    db.prepare("insert into users(username, password_hash) values (?, ?)").bind(newUsername, old.password_hash),
+    db.prepare("insert into users(username, password_hash, password_salt, password_version) values (?, ?, ?, ?)")
+      .bind(newUsername, old.password_hash, old.password_salt, old.password_version),
     db.prepare("delete from users where username = ?").bind(oldUsername),
     db.prepare("update messages set nick = ? where nick = ?").bind(newUsername, oldUsername),
     db.prepare("update profiles set username = ? where username = ?").bind(newUsername, oldUsername),
@@ -85,4 +106,37 @@ export async function getProfile(db, username) {
 export async function updateAvatar(db, username, avatarUrl) {
   await getProfile(db, username);
   await db.prepare("update profiles set avatar = ? where username = ?").bind(avatarUrl, username).run();
+}
+
+async function hashPassword(password, salt) {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(password),
+    "PBKDF2",
+    false,
+    ["deriveBits"]
+  );
+  const bits = await crypto.subtle.deriveBits(
+    {
+      name: "PBKDF2",
+      hash: "SHA-256",
+      salt: new TextEncoder().encode(salt),
+      iterations: 210000,
+    },
+    key,
+    256
+  );
+  return base64Url(new Uint8Array(bits));
+}
+
+function randomToken(byteLength) {
+  const bytes = new Uint8Array(byteLength);
+  crypto.getRandomValues(bytes);
+  return base64Url(bytes);
+}
+
+function base64Url(bytes) {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
 }

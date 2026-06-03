@@ -14,3 +14,7 @@ class_name = "ChatRoom"
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["ChatRoom"]
+
+[[kv_namespaces]]
+binding = "SESSIONS"
+id = ""

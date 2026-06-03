@@ -13,9 +13,12 @@ export class ChatRoom {
       return new Response("Expected websocket", { status: 426 });
     }
 
+    const username = String(request.headers.get("X-FreeChat-User") || "").trim();
+    if (!username) return new Response("Unauthorized", { status: 401 });
+
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
-    server.serializeAttachment({ username: null, chatId: null });
+    server.serializeAttachment({ username, chatId: null });
     this.ctx.acceptWebSocket(server);
 
     return new Response(null, { status: 101, webSocket: client });
@@ -48,8 +51,7 @@ export class ChatRoom {
     }
   }
 
-  async setUsername(ws, session, data) {
-    session.username = String(data.username || "").trim();
+  async setUsername(ws, session) {
     ws.serializeAttachment(session);
     this.send(ws, "chats_list", await getChats(this.env.DB));
   }
